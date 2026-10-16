@@ -170,7 +170,7 @@ Exemple de requête pour récupérer un token JWT :
 
 ```json
 {
-  "email": "user@example.com",
+  "username": "user@example.com",
   "password": "plainpassword"
 }
 ```
@@ -234,7 +234,7 @@ http://127.0.0.1:8000/api/login_check
 
 ```json
 {
-  "email": "user@example.com",
+  "username": "user@example.com",
   "password": "plainpassword"
 }
 ```
