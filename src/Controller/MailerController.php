@@ -9,33 +9,24 @@ use Symfony\Component\Mailer\MailerInterface;
 use Symfony\Component\Mime\Email;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Bridge\Twig\Mime\TemplatedEmail;
+use App\Service\EmailSender;
 
 class MailerController extends AbstractController
 {
     private MailerInterface $mailer;
+    private EmailSender $emailSender;
 
-    public function __construct(MailerInterface $mailer){
-        $this->mailer = $mailer;
+    public function __construct(MailerInterface $mailer, EmailSender $emailSender) {
+        $this->mailer = $mailer; // if you still need it
+        $this->emailSender = $emailSender;
     }
 
-    #[Route('/email', name: 'send_email', methods: ['GET', 'POST'])]
     public function sendEmail(Request $request): Response
     {
-        // Récupère le destinataire soit en query (?to=...), soit en body (form/post)
         $to = $request->query->get('to') ?? $request->request->get('to');
+        if (!$to) { return new Response('Le paramètre "to" est requis.', 400); }
 
-        if (!$to) {
-            return new Response('Le paramètre "to" est requis.', Response::HTTP_BAD_REQUEST);
-        }
-
-        $email = (new TemplatedEmail())
-            ->from('hello@demomailtrap.co')
-            ->to($to)
-            ->subject('Les nouveaux jeux de la semaine !')
-            ->htmlTemplate('templates/mail.html.twig');
-
-        $this->mailer->send($email);
-
-        return new Response('Email envoyé.', Response::HTTP_OK);
+        $this->emailSender->sendWeeklyNewsletter($to);
+        return new Response('Email envoyé.', 200);
     }
 }
