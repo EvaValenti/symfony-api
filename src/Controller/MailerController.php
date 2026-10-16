@@ -30,7 +30,7 @@ class MailerController extends AbstractController
 
         $email = (new TemplatedEmail())
             ->from('hello@demomailtrap.co')
-            ->to($to) // Remplacez par votre email !
+            ->to($to)
             ->subject('Les nouveaux jeux de la semaine !')
             ->htmlTemplate('templates/mail.html.twig');
 
