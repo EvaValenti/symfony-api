@@ -2,28 +2,42 @@
 
 namespace App\Controller;
 
+use App\Entity\User;
+use App\Repository\UserRepository;
+use Doctrine\ORM\EntityManager;
+use Doctrine\ORM\EntityManagerInterface;
+use Lexik\Bundle\JWTAuthenticationBundle\Services\JWTTokenManagerInterface;
+use Nelmio\ApiDocBundle\Annotation\Model;
+use OpenApi\Attributes as OA;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
-use Symfony\Component\Routing\Attribute\Route;
-use App\Repository\UserRepository;
-use Symfony\Component\HttpFoundation\Response;
-use Symfony\Component\Serializer\SerializerInterface;
-use Symfony\Component\Routing\Requirement\Requirement;
-use App\Entity\User;
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
+use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
-use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Component\Routing\Requirement\Requirement;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 use Symfony\Component\Serializer\Normalizer\AbstractNormalizer;
+use Symfony\Component\Serializer\SerializerInterface;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
 use Symfony\Contracts\Cache\ItemInterface;
 use Symfony\Contracts\Cache\TagAwareCacheInterface;
-use Symfony\Component\Security\Http\Attribute\IsGranted;
-use Doctrine\ORM\EntityManager;
-use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
-use Lexik\Bundle\JWTAuthenticationBundle\Services\JWTTokenManagerInterface;
 
 final class UserController extends AbstractController
 {
+    #[OA\Tag(name: 'utilisateurs')]
+    #[OA\Response(
+        response: 200,
+        description: 'Accueil du contrôleur utilisateur.',
+        content: new OA\JsonContent(
+            type: 'object',
+            properties: [
+                new OA\Property(property: 'message', type: 'string', example: 'Welcome to your new controller!'),
+                new OA\Property(property: 'path', type: 'string', example: 'src/Controller/UserController.php')
+            ]
+        )
+    )]
     #[Route('/user', name: 'app_user')]
     public function index(): JsonResponse
     {
@@ -33,6 +47,27 @@ final class UserController extends AbstractController
         ]);
     }
 
+    #[OA\Tag(name: 'utilisateurs')]
+    #[OA\Response(
+        response: 200,
+        description: 'Retourne la liste paginée des utilisateurs.',
+        content: new OA\JsonContent(
+            type: 'array',
+            items: new OA\Items(ref: new Model(type: User::class, groups: ['getUsers']))
+        )
+    )]
+    #[OA\Parameter(
+        name: 'page',
+        in: 'query',
+        description: 'Numéro de la page.',
+        schema: new OA\Schema(type: 'integer', default: 1)
+    )]
+    #[OA\Parameter(
+        name: 'limit',
+        in: 'query',
+        description: 'Nombre d\'éléments par page.',
+        schema: new OA\Schema(type: 'integer', default: 5)
+    )]
     #[Route('/api/v1/users', name: 'users', methods: ['GET'])]
     #[IsGranted('ADMIN', message: 'Vous n\'êtes pas autorisé à visualiser ces éléments.')]
     public function getUsers(UserRepository $userRepository, SerializerInterface $serializer, Request $request, TagAwareCacheInterface $cachePool): JsonResponse
@@ -55,6 +90,20 @@ final class UserController extends AbstractController
         return new JsonResponse($jsonUsers, Response::HTTP_OK, [], true);
     }
 
+    #[OA\Tag(name: 'utilisateurs')]
+    #[OA\Parameter(
+        name: 'id',
+        in: 'path',
+        description: 'Identifiant de l\'utilisateur.',
+        required: true,
+        schema: new OA\Schema(type: 'integer')
+    )]
+    #[OA\Response(
+        response: 200,
+        description: 'Retourne un utilisateur selon son identifiant.',
+        content: new OA\JsonContent(ref: new Model(type: User::class, groups: ['getUser']))
+    )]
+    #[OA\Response(response: 404, description: 'Utilisateur introuvable.')]
     #[Route('/api/v1/user/{id}', name: 'user', requirements: ['id' => Requirement::DIGITS], methods: ['GET'])]
     #[IsGranted('ADMIN', message: 'Vous n\'êtes pas autorisé à visualiser cet élément.')]
     public function getSingleUser(int $id, UserRepository $userRepository): JsonResponse
@@ -68,6 +117,18 @@ final class UserController extends AbstractController
         return new JsonResponse(null, Response::HTTP_NOT_FOUND);
     }
 
+    #[OA\Tag(name: 'utilisateurs')]
+    #[OA\RequestBody(
+        description: 'Données nécessaires à la création d\'un utilisateur.',
+        required: true,
+        content: new OA\JsonContent(ref: new Model(type: User::class, groups: ['getUser']))
+    )]
+    #[OA\Response(
+        response: 201,
+        description: 'Utilisateur créé avec succès.',
+        content: new OA\JsonContent(ref: new Model(type: User::class, groups: ['getUser']))
+    )]
+    #[OA\Response(response: 400, description: 'Données invalides ou validation échouée.')]
     #[Route('/api/v1/user/create', name: 'createUser', methods: ['POST'])]
     #[IsGranted('ADMIN', message: 'Vous n\'êtes pas autorisé à créer cet élément.')]
     public function createUser(Request $request, SerializerInterface $serializer, EntityManagerInterface $em, UrlGeneratorInterface $urlGenerator, TagAwareCacheInterface $cachePool, ValidatorInterface $validator)
@@ -94,6 +155,27 @@ final class UserController extends AbstractController
         );
     }
 
+    #[OA\Tag(name: 'utilisateurs')]
+    #[OA\Parameter(
+        name: 'id',
+        in: 'path',
+        description: 'Identifiant de l\'utilisateur à modifier.',
+        required: true,
+        schema: new OA\Schema(type: 'integer')
+    )]
+    #[OA\RequestBody(
+        description: 'Nouvelles données de l\'utilisateur.',
+        required: true,
+        content: new OA\JsonContent(ref: new Model(type: User::class, groups: ['getUser']))
+    )]
+    #[OA\Response(
+        response: 200,
+        description: 'Utilisateur mis à jour avec succès.',
+        content: new OA\JsonContent(type: 'object', properties: [
+            new OA\Property(property: 'status', type: 'string', example: 'success')
+        ])
+    )]
+    #[OA\Response(response: 400, description: 'Données invalides ou validation échouée.')]
     #[Route('/api/v1/user/update/{id}', name: 'updateUser', methods: ['PUT'])]
     #[IsGranted('ADMIN', message: 'Vous n\'êtes pas autorisé à modifier cet élément.')]
     public function updateUser(Request $request, SerializerInterface $serializer, EntityManagerInterface $em, UrlGeneratorInterface $urlGenerator, User $currentUser, TagAwareCacheInterface $cachePool, ValidatorInterface $validator)
@@ -121,6 +203,22 @@ final class UserController extends AbstractController
         );
     }
 
+    #[OA\Tag(name: 'utilisateurs')]
+    #[OA\Parameter(
+        name: 'id',
+        in: 'path',
+        description: 'Identifiant de l\'utilisateur à supprimer.',
+        required: true,
+        schema: new OA\Schema(type: 'integer')
+    )]
+    #[OA\Response(
+        response: 200,
+        description: 'Utilisateur supprimé avec succès.',
+        content: new OA\JsonContent(type: 'object', properties: [
+            new OA\Property(property: 'status', type: 'string', example: 'success')
+        ])
+    )]
+    #[OA\Response(response: 404, description: 'Utilisateur introuvable.')]
     #[Route('/api/v1/user/delete/{id}', name: 'deleteUser', methods: ['DELETE'])]
     #[IsGranted('ADMIN', message: 'Vous n\'êtes pas autorisé à supprimer cet élément.')]
     public function deleteUser(User $user, EntityManagerInterface $em,  TagAwareCacheInterface $cachePool): JsonResponse
@@ -134,9 +232,30 @@ final class UserController extends AbstractController
         );
     }
 
-    // Manual login route that returns a JWT token.
-    // Note: lexik/jwt-authentication-bundle already provides a token endpoint if configured (check_path in security.yaml),
-    // but this explicit controller method lets you control the response format and flow.
+    #[OA\Tag(name: 'authentification')]
+    #[OA\RequestBody(
+        description: 'Identifiants utilisés pour obtenir un token JWT.',
+        required: true,
+        content: new OA\JsonContent(
+            type: 'object',
+            properties: [
+                new OA\Property(property: 'email', type: 'string', example: 'user@example.com'),
+                new OA\Property(property: 'password', type: 'string', example: 'plainpassword')
+            ]
+        )
+    )]
+    #[OA\Response(
+        response: 200,
+        description: 'Retourne un token JWT valide.',
+        content: new OA\JsonContent(
+            type: 'object',
+            properties: [
+                new OA\Property(property: 'token', type: 'string', example: 'eyJ0eXAiOiJKV1QiLCJhbGciOiJ...')
+            ]
+        )
+    )]
+    #[OA\Response(response: 400, description: 'Email ou mot de passe manquant.')]
+    #[OA\Response(response: 401, description: 'Identifiants invalides.')]
     #[Route('/api/login_check', name: 'api_login_check', methods: ['POST'])]
     public function login(Request $request, UserRepository $userRepository, UserPasswordHasherInterface $passwordHasher, JWTTokenManagerInterface $jwtManager): JsonResponse
     {
