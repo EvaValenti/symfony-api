@@ -19,6 +19,8 @@ use Symfony\Contracts\Cache\ItemInterface;
 use Symfony\Contracts\Cache\TagAwareCacheInterface;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 use Doctrine\ORM\EntityManager;
+use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
+use Lexik\Bundle\JWTAuthenticationBundle\Services\JWTTokenManagerInterface;
 
 final class UserController extends AbstractController
 {
@@ -68,7 +70,7 @@ final class UserController extends AbstractController
 
     #[Route('/api/v1/user/create', name: 'createUser', methods: ['POST'])]
     #[IsGranted('ADMIN', message: 'Vous n\'êtes pas autorisé à créer cet élément.')]
-    public function createUser(Request $request, SerializerInterface $serializer, EntityManagerInterface $em, UrlGeneratorInterface $urlGenerator, TagAwareCacheInterface $cachePool, ValidatorInterface $validator): JsonResponse
+    public function createUser(Request $request, SerializerInterface $serializer, EntityManagerInterface $em, UrlGeneratorInterface $urlGenerator, TagAwareCacheInterface $cachePool, ValidatorInterface $validator)
     {
         $user = $serializer->deserialize($request->getContent(), User::class, 'json');
         $errors = $validator->validate($user);
@@ -94,7 +96,7 @@ final class UserController extends AbstractController
 
     #[Route('/api/v1/user/update/{id}', name: 'updateUser', methods: ['PUT'])]
     #[IsGranted('ADMIN', message: 'Vous n\'êtes pas autorisé à modifier cet élément.')]
-    public function updateUser(Request $request, SerializerInterface $serializer, EntityManagerInterface $em, UrlGeneratorInterface $urlGenerator, User $currentUser, TagAwareCacheInterface $cachePool, ValidatorInterface $validator): JsonResponse
+    public function updateUser(Request $request, SerializerInterface $serializer, EntityManagerInterface $em, UrlGeneratorInterface $urlGenerator, User $currentUser, TagAwareCacheInterface $cachePool, ValidatorInterface $validator)
     {
         $updatedUser = $serializer->deserialize($request->getContent(), User::class, 'json',
         [AbstractNormalizer::OBJECT_TO_POPULATE => $currentUser]);
@@ -130,5 +132,34 @@ final class UserController extends AbstractController
         return $this->json(
             ['status' => 'success'], Response::HTTP_OK
         );
+    }
+
+    // Manual login route that returns a JWT token.
+    // Note: lexik/jwt-authentication-bundle already provides a token endpoint if configured (check_path in security.yaml),
+    // but this explicit controller method lets you control the response format and flow.
+    #[Route('/api/login_check', name: 'api_login_check', methods: ['POST'])]
+    public function login(Request $request, UserRepository $userRepository, UserPasswordHasherInterface $passwordHasher, JWTTokenManagerInterface $jwtManager): JsonResponse
+    {
+        $data = json_decode($request->getContent(), true);
+        $email = $data['email'] ?? null;
+        $password = $data['password'] ?? null;
+
+        if (!$email || !$password) {
+            return $this->json(['error' => 'Email and password are required.'], Response::HTTP_BAD_REQUEST);
+        }
+
+        $user = $userRepository->findOneBy(['email' => $email]);
+
+        if (!$user) {
+            return $this->json(['error' => 'Invalid credentials.'], Response::HTTP_UNAUTHORIZED);
+        }
+
+        if (!$passwordHasher->isPasswordValid($user, $password)) {
+            return $this->json(['error' => 'Invalid credentials.'], Response::HTTP_UNAUTHORIZED);
+        }
+
+        $token = $jwtManager->create($user);
+
+        return $this->json(['token' => $token], Response::HTTP_OK);
     }
 }
